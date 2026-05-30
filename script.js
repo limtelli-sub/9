@@ -1,147 +1,352 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const searchBtn = document.getElementById('searchBtn');
-    const interestInput = document.getElementById('interestInput');
-    const bookList = document.getElementById('bookList');
-    const loading = document.getElementById('loading');
+const screens = {
+    start: document.getElementById('start-screen'),
+    game: document.getElementById('game-screen'),
+    gameOver: document.getElementById('game-over-screen')
+};
 
-    // 100개의 가상 도서 데이터 생성
-    const mockBooks = generateMockBooks(100);
+const UI = {
+    score: document.getElementById('score'),
+    highScore: document.getElementById('high-score'),
+    speed: document.getElementById('speed'),
+    shieldCount: document.getElementById('shield-count'),
+    boostStatus: document.getElementById('boost-status'),
+    slowStatus: document.getElementById('slow-status'),
+    finalScore: document.getElementById('final-score'),
+    startBtn: document.getElementById('start-btn'),
+    restartBtn: document.getElementById('restart-btn'),
+    homeBtn: document.getElementById('home-btn')
+};
 
-    // 검색 실행 함수
-    const fetchBooks = () => {
-        const query = interestInput.value.trim().toLowerCase();
-        if (!query) {
-            alert('관심사를 입력해주세요. (예: 위로, 사랑, 철학)');
-            return;
-        }
+const gameArea = document.getElementById('game-area');
+const robot = document.getElementById('robot');
+const obstaclesContainer = document.getElementById('obstacles');
+const ground = document.querySelector('.ground');
 
-        // 초기화 및 로딩 표시
-        bookList.innerHTML = '';
-        loading.classList.remove('hidden');
+let isGameActive = false;
+let isJumping = false;
 
-        // 가짜 로딩 시간(0.8초)을 주어 검색하는 듯한 느낌 제공
-        setTimeout(() => {
-            loading.classList.add('hidden');
+// Game Variables
+let score = 0;
+let highScore = localStorage.getItem('neonRunHighScore') || 0;
+let speed = 1.0;
+let lastTime = 0;
+let speedIncreaseTimer = 0;
+let obstacleTimer = 0;
+let nextObstacleTime = 0;
 
-            // 검색 로직 (제목, 저자, 키워드 중 하나라도 포함되면 매칭)
-            const filteredBooks = mockBooks.filter(book => {
-                return book.title.toLowerCase().includes(query) ||
-                       book.authors.toLowerCase().includes(query) ||
-                       book.keywords.some(k => k.includes(query));
-            });
+let robotY = 0; // vertical position relative to ground
+let robotVelocity = 0;
+const gravity = -0.7;
+const jumpPower = 16;
 
-            if (filteredBooks.length === 0) {
-                bookList.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--text-secondary);">해당 관심사와 관련된 책을 찾지 못했습니다. 다른 키워드(예: 사랑, 우주, 위로)로 시도해보세요.</p>';
-                return;
-            }
+let shieldsRemaining = 2;
+let isInvincible = false;
+let canBoost = true;
+let canSlow = false;
+let slowCooldown = 5000;
 
-            // 별점이 높은 순으로 정렬
-            filteredBooks.sort((a, b) => b.stars - a.stars);
+const rocks = [];
 
-            // 화면에 렌더링 (최대 12개까지만 보여주기)
-            renderBooks(filteredBooks.slice(0, 12));
-        }, 800);
-    };
+// Initialize
+UI.highScore.textContent = Math.floor(highScore);
 
-    // 별 문자열 생성 함수
-    const getStarString = (count) => {
-        return '★'.repeat(count) + '☆'.repeat(5 - count);
-    };
+function switchScreen(screenName) {
+    Object.values(screens).forEach(s => s.classList.remove('active'));
+    screens[screenName].classList.add('active');
+}
 
-    // 렌더링 함수
-    const renderBooks = (books) => {
-        books.forEach((book, index) => {
-            const delay = index * 0.1; // 순차적 애니메이션 딜레이
-            const card = document.createElement('div');
-            card.className = 'book-card';
-            card.style.animationDelay = `${delay}s`;
-
-            card.innerHTML = `
-                <img src="${book.thumbnail}" alt="${book.title} 표지" class="book-thumb" loading="lazy">
-                <h3 class="book-title">${book.title}</h3>
-                <p class="book-author">${book.authors}</p>
-                
-                <div class="book-info">
-                    <div class="rating-price">
-                        <span class="stars" title="${book.stars}점">${getStarString(book.stars)}</span>
-                        <span class="price">${book.priceText}</span>
-                    </div>
-                    <!-- 가상의 구매 링크 -->
-                    <a href="#" class="buy-btn" onclick="alert('가상의 도서입니다. 실제로는 구매할 수 없습니다.'); return false;">자세히 보기 및 구매</a>
-                </div>
-            `;
-            
-            bookList.appendChild(card);
-        });
-    };
-
-    // 이벤트 리스너 등록
-    searchBtn.addEventListener('click', fetchBooks);
+function startGame() {
+    isGameActive = true;
+    score = 0;
+    speed = 1.0; // Reset to 1 on restart
+    speedIncreaseTimer = 0;
+    obstacleTimer = 0;
+    nextObstacleTime = getRandomObstacleTime();
     
-    interestInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            fetchBooks();
-        }
+    // reset robot
+    robotY = 0;
+    robotVelocity = 0;
+    updateRobotPosition();
+    robot.classList.add('run');
+    
+    // clear rocks
+    rocks.forEach(rock => rock.element.remove());
+    rocks.length = 0;
+    
+    shieldsRemaining = 2;
+    isInvincible = false;
+    canBoost = true;
+    canSlow = false;
+    slowCooldown = 5000;
+    
+    UI.shieldCount.textContent = shieldsRemaining;
+    UI.boostStatus.textContent = "READY";
+    UI.boostStatus.className = "ready";
+    UI.slowStatus.textContent = "WAIT";
+    UI.slowStatus.className = "cooldown";
+    robot.classList.remove('shield-active');
+    
+    ground.classList.add('moving');
+    
+    switchScreen('game');
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
+}
+
+function gameOver() {
+    isGameActive = false;
+    robot.classList.remove('run');
+    ground.classList.remove('moving');
+    
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('neonRunHighScore', highScore);
+        UI.highScore.textContent = Math.floor(highScore);
+    }
+    
+    UI.finalScore.textContent = Math.floor(score);
+    switchScreen('gameOver');
+}
+
+function getRandomObstacleTime() {
+    // interval gets shorter as speed increases
+    const baseTime = 1200;
+    const minTime = 500;
+    let time = (baseTime / speed) + Math.random() * 800;
+    return Math.max(time, minTime);
+}
+
+function createObstacle() {
+    const rockEl = document.createElement('div');
+    if (Math.random() > 0.7) {
+        rockEl.classList.add('tall-rock');
+    } else {
+        rockEl.classList.add('rock');
+    }
+    obstaclesContainer.appendChild(rockEl);
+    
+    rocks.push({
+        element: rockEl,
+        x: gameArea.clientWidth // start at right edge
     });
-});
+}
 
-// 가상 도서 데이터 생성 함수
-function generateMockBooks(count) {
-    const adjectives = ["따뜻한", "차가운", "별빛 내리는", "조용한", "잃어버린", "비밀스러운", "눈부신", "오래된", "슬픈", "행복한", "달콤한", "기묘한", "아름다운", "잔잔한", "신비로운"];
-    const nouns = ["밤", "바다", "숲", "기억", "편지", "우주", "시간", "고양이", "마음", "계절", "정원", "별", "여행", "꿈", "노래"];
-    const suffixes = ["의 노래", "을 찾아서", "과 함께", "이야기", "의 비밀", "의 끝", "에서 온 편지", "의 조각들", "속으로", ""];
+function jump() {
+    if (!isGameActive || isJumping) return;
+    isJumping = true;
+    robotVelocity = jumpPower;
+    robot.classList.remove('run');
+}
+
+function boostSpeed() {
+    if (!isGameActive || !canBoost) return;
     
-    const authorNames = ["김서연", "이지훈", "박민수", "최유진", "정지안", "윤도현", "강하늘", "임수정", "한소희", "백지영", "무라카미 하루키", "알랭 드 보통", "베르나르 베르베르", "헤르만 헤세"];
-    const allKeywords = ["위로", "사랑", "철학", "우주", "성장", "모험", "심리", "예술", "역사", "과학", "소설", "에세이", "시", "치유", "인생", "가족", "우정"];
+    speed *= 2; // double current speed
+    updateSpeedUI();
+    
+    canBoost = false;
+    UI.boostStatus.textContent = "COOLDOWN";
+    UI.boostStatus.className = "cooldown";
+    
+    setTimeout(() => {
+        if(isGameActive) {
+            canBoost = true;
+            UI.boostStatus.textContent = "READY";
+            UI.boostStatus.className = "ready";
+        }
+    }, 2500);
+    
+    // Create a visual feedback for boost
+    const glow = document.querySelector('.robot-glow');
+    glow.style.background = 'var(--neon-pink)';
+    glow.style.transform = 'translateX(-50%) scale(1.5)';
+    setTimeout(() => {
+        glow.style.background = 'var(--neon-blue)';
+        glow.style.transform = 'translateX(-50%) scale(1)';
+    }, 500);
+}
 
-    const books = [];
+function activateShield() {
+    if (!isGameActive || shieldsRemaining <= 0 || isInvincible) return;
+    
+    shieldsRemaining--;
+    UI.shieldCount.textContent = shieldsRemaining;
+    
+    isInvincible = true;
+    robot.classList.add('shield-active');
+    
+    setTimeout(() => {
+        isInvincible = false;
+        robot.classList.remove('shield-active');
+    }, 3000);
+}
 
-    for (let i = 0; i < count; i++) {
-        // 제목 무작위 조합
-        const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-        const noun = nouns[Math.floor(Math.random() * nouns.length)];
-        const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
-        const title = `${adj} ${noun}${suffix}`;
+function applySlow() {
+    if (!isGameActive || !canSlow) return;
+    
+    speed *= 0.8;
+    updateSpeedUI();
+    
+    canSlow = false;
+    slowCooldown = 5000;
+    UI.slowStatus.textContent = "COOLDOWN";
+    UI.slowStatus.className = "cooldown";
+    
+    const glow = document.querySelector('.robot-glow');
+    glow.style.background = '#facc15';
+    glow.style.transform = 'translateX(-50%) scale(1.5)';
+    setTimeout(() => {
+        glow.style.background = 'var(--neon-blue)';
+        glow.style.transform = 'translateX(-50%) scale(1)';
+    }, 500);
+}
 
-        // 저자 무작위 선택
-        const author = authorNames[Math.floor(Math.random() * authorNames.length)];
+function updateSpeedUI() {
+    UI.speed.textContent = speed.toFixed(1);
+    // visually update ground speed based on a baseline
+    let animSpeed = 2 / speed;
+    // Cap animation speed so it doesn't look too glitchy if speed goes crazy high
+    animSpeed = Math.max(animSpeed, 0.2);
+    ground.style.animationDuration = `${animSpeed}s`;
+}
 
-        // 키워드 2~3개 무작위 선택
-        const shuffledKeywords = [...allKeywords].sort(() => 0.5 - Math.random());
-        const keywords = shuffledKeywords.slice(0, Math.floor(Math.random() * 2) + 2);
+function checkCollision(rock) {
+    const robotRect = robot.getBoundingClientRect();
+    const rockRect = rock.element.getBoundingClientRect();
+    
+    // simple AABB (Axis-Aligned Bounding Box)
+    // Reduce hit box slightly for fairer gameplay
+    const paddingX = 15;
+    const paddingY = 15;
+    
+    if (
+        robotRect.left < rockRect.right - paddingX &&
+        robotRect.right > rockRect.left + paddingX &&
+        robotRect.top < rockRect.bottom - paddingY &&
+        robotRect.bottom > rockRect.top + paddingY
+    ) {
+        return true;
+    }
+    return false;
+}
 
-        // 제목이나 저자 이름, 그리고 결합된 단어들을 키워드에 추가해서 검색이 잘 되게 함
-        keywords.push(noun);
-        if (adj === "따뜻한" || adj === "행복한") keywords.push("위로", "치유");
-        if (noun === "우주" || noun === "별") keywords.push("과학", "우주");
-
-        // 평점 1~5 (3~5점이 많이 나오도록 가중치)
-        const randStar = Math.random();
-        let stars = 3;
-        if (randStar > 0.8) stars = 5;
-        else if (randStar > 0.5) stars = 4;
-        else if (randStar > 0.2) stars = 3;
-        else if (randStar > 0.05) stars = 2;
-        else stars = 1;
-
-        // 가격 (10000원 ~ 25000원)
-        const priceNum = Math.floor(Math.random() * 15 + 10) * 1000;
-        const priceText = priceNum.toLocaleString() + '원';
-
-        // 썸네일 (picsum을 사용하여 고유하고 감성적인 이미지 제공)
-        const seed = Math.floor(Math.random() * 10000);
-        const thumbnail = `https://picsum.photos/seed/${seed}/280/350`;
-
-        books.push({
-            id: i,
-            title: title,
-            authors: author,
-            keywords: keywords,
-            stars: stars,
-            priceText: priceText,
-            thumbnail: thumbnail
-        });
+function gameLoop(timestamp) {
+    if (!isGameActive) return;
+    
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    // Safety check to prevent huge delta times if tab is inactive
+    if (deltaTime > 100) {
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+    
+    if (!canSlow) {
+        slowCooldown -= deltaTime;
+        if (slowCooldown <= 0) {
+            canSlow = true;
+            UI.slowStatus.textContent = "READY";
+            UI.slowStatus.className = "ready";
+        }
     }
 
-    return books;
+    // --- Update Speed & Score ---
+    speedIncreaseTimer += deltaTime;
+    if (speedIncreaseTimer >= 1000) {
+        speed += 0.01;
+        speedIncreaseTimer -= 1000;
+        updateSpeedUI();
+    }
+    
+    // Score increases based on current speed
+    score += speed * deltaTime * 0.01;
+    UI.score.textContent = Math.floor(score);
+    
+    // --- Update Robot Physics ---
+    if (isJumping) {
+        robotY += robotVelocity;
+        robotVelocity += gravity;
+        
+        if (robotY <= 0) {
+            robotY = 0;
+            isJumping = false;
+            robotVelocity = 0;
+            robot.classList.add('run');
+        }
+        updateRobotPosition();
+    }
+    
+    // --- Update Obstacles ---
+    obstacleTimer += deltaTime;
+    if (obstacleTimer >= nextObstacleTime) {
+        createObstacle();
+        obstacleTimer = 0;
+        nextObstacleTime = getRandomObstacleTime();
+    }
+    
+    // Base move amount pixels per ms, scaled by speed
+    const baseMoveSpeed = 0.45;
+    const moveAmount = baseMoveSpeed * speed * deltaTime; 
+    
+    for (let i = rocks.length - 1; i >= 0; i--) {
+        const rock = rocks[i];
+        rock.x -= moveAmount;
+        rock.element.style.left = `${rock.x}px`;
+        
+        if (!isInvincible && checkCollision(rock)) {
+            gameOver();
+            return;
+        }
+        
+        // Remove if off screen
+        if (rock.x < -60) {
+            rock.element.remove();
+            rocks.splice(i, 1);
+        }
+    }
+    
+    requestAnimationFrame(gameLoop);
 }
+
+function updateRobotPosition() {
+    // 80 is the ground height
+    robot.style.bottom = `${80 + robotY}px`;
+}
+
+// Event Listeners
+UI.startBtn.addEventListener('click', startGame);
+UI.restartBtn.addEventListener('click', startGame);
+UI.homeBtn.addEventListener('click', () => switchScreen('start'));
+
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        if(isGameActive) {
+            jump();
+            e.preventDefault(); // prevent scrolling
+        }
+    }
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        if (isGameActive) {
+            activateShield();
+            e.preventDefault();
+        }
+    }
+    if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+        if (isGameActive) {
+            applySlow();
+            e.preventDefault();
+        }
+    }
+    if (e.code === 'Enter') {
+        e.preventDefault(); // 버튼 클릭 이벤트(초기화 등)가 중복 발생하지 않도록 기본 동작 막기
+        if(isGameActive) {
+            boostSpeed();
+        } else if (screens.start.classList.contains('active') || screens.gameOver.classList.contains('active')) {
+            startGame();
+        }
+    }
+});
+
+// Initial Setup
+updateSpeedUI();
