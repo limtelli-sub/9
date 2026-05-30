@@ -3,82 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>약사고등학교 발표 도우미</title>
+    <title>마음이 닿는 책 - 맞춤형 도서 추천</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <!-- Web Font: Pretendard -->
-    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar for Names Input -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h2>📋 명단 입력</h2>
-                <p>학생 이름/번호를 쉼표(,)로 구분해서 입력하세요.</p>
+    <div class="container">
+        <header class="header">
+            <h1>마음이 닿는 책</h1>
+            <p>당신의 관심사를 들려주세요. 그에 맞는 이야기를 찾아드릴게요.</p>
+        </header>
+
+        <section class="search-section">
+            <input type="text" id="interestInput" placeholder="예: 따뜻한 위로, 철학, 사랑, 우주..." />
+            <button id="searchBtn">추천받기</button>
+        </section>
+
+        <div id="loading" class="loading hidden">당신의 마음에 닿을 책을 찾고 있습니다...</div>
+        
+        <section class="results-section">
+            <div id="bookList" class="book-grid">
+                <!-- 도서 카드가 여기에 동적으로 추가됩니다 -->
             </div>
-            
-            <textarea id="nameInput" placeholder="예: 김약사, 이약사, 박약사..."></textarea>
-            
-            <div class="stats-container">
-                <div class="stat-box">
-                    <span class="stat-label">총 인원</span>
-                    <span class="stat-value" id="totalCount">0</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-label">남은 인원</span>
-                    <span class="stat-value highlight" id="remainCount">0</span>
-                </div>
-            </div>
-
-            <div class="options">
-                <label class="checkbox-container">
-                    <input type="checkbox" id="excludeCheckbox" checked>
-                    <span class="checkmark"></span>
-                    이미 뽑힌 사람 제외하기
-                </label>
-            </div>
-
-            <button id="resetListBtn" class="btn btn-secondary">명단 초기화 (다시 채우기)</button>
-        </aside>
-
-        <!-- Main Content -->
-        <main class="main-content">
-            <header class="app-header">
-                <h1>약사고등학교 발표 도우미 🎓</h1>
-            </header>
-
-            <div class="content-grid">
-                <!-- Random Picker Section -->
-                <section class="card picker-section">
-                    <div class="picker-display" id="pickerDisplay">
-                        <span id="pickedName">대기 중</span>
-                    </div>
-                    <button id="drawBtn" class="btn btn-primary btn-large">
-                        🎉 발표자 추첨하기
-                    </button>
-                </section>
-
-                <!-- Timer Section -->
-                <section class="card timer-section">
-                    <div class="timer-display" id="timerDisplay">
-                        <span id="timeText">00:00</span>
-                    </div>
-                    <div class="timer-presets">
-                        <button class="btn btn-timer" data-time="60">1분</button>
-                        <button class="btn btn-timer" data-time="180">3분</button>
-                        <button class="btn btn-timer" data-time="300">5분</button>
-                    </div>
-                    <div class="timer-actions">
-                        <button id="toggleTimerBtn" class="btn btn-outline">시작 / 일시정지</button>
-                        <button id="resetTimerBtn" class="btn btn-outline danger">초기화</button>
-                    </div>
-                </section>
-            </div>
-        </main>
+        </section>
     </div>
-
-    <!-- Celebration Effect overlay -->
-    <div id="confettiOverlay"></div>
 
     <script src="script.js"></script>
 </body>
